@@ -27,7 +27,8 @@ Function regrowthModel_ListBoxProc(lba) : ListBoxControl
 			break
 		case 4: // cell selection
 		case 5: // cell selection plus shift key
-			runRegrowthModel_Init(row)
+			Variable doPlot = 1
+			runRegrowthModel_Init(row, doPlot)
 			break
 		case 6: // begin edit
 			break

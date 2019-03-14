@@ -150,8 +150,10 @@ Function runRegrowth_All()
 	//global 2, keep track of each model run (10,000)
 	Make/O/N=(10000,m) pooledRegrowth2 = nan
 
+	Variable doPlot = 0
+	
 	for (i=0; i<m; i+=1)
-		runRegrowthModel_Init(i) // i is the row into regrowthRawData
+		runRegrowthModel_Init(i, doPlot) // i is the row into regrowthRawData
 	endfor
 	
 	// histogram of pooled
@@ -201,8 +203,9 @@ Function regrowthPoolAnalysis()
 End
 ////////////////////////////////////////////////////////////////////////////////
 //initialize model with row selection into raw data
-Function runRegrowthModel_Init(row)
+Function runRegrowthModel_Init(row, doPlot)
 Variable row
+Variable doPlot // 20190314 resubmit
 
 	print "\r"
 	print"=== runRegrowthModel_Init() row:", row
@@ -236,7 +239,7 @@ Variable row
 	rs.prevOccupied = prevOccupied // from text file
 	
 	runRegrowthModel(rs)
-	plotRegrowthModel(rs)
+	plotRegrowthModel(rs, doPlot)
 End
 ////////////////////////////////////////////////////////////////////////////////
 Function scaleModel(rs)
@@ -298,6 +301,13 @@ STRUCT regrowthStruct &rs
 	Make/O/N=(rs.numberOfIerations) regrowthOutput = NaN
 	Make/O/N=(rs.numberOfIerations) fractionRegrowth = NaN
 	
+	//
+	// 20190314 for resubmission
+	Make/O/N=(rs.numberOfIerations) regrowthOutput_6 = NaN
+	Make/O/N=(rs.numberOfIerations) fractionRegrowth_6 = NaN
+	Make/O/N=(rs.numberOfIerations) regrowthOutput_5 = NaN
+	Make/O/N=(rs.numberOfIerations) fractionRegrowth_5 = NaN
+
 	Variable currentNumberOfRegrowth
 	Variable currenFractionRegrowth
 	
@@ -329,6 +339,50 @@ STRUCT regrowthStruct &rs
 		regrowthOutput[i] = currentNumberOfRegrowth
 		fractionRegrowth[i] = currenFractionRegrowth
 		
+		//
+		// 20190314 for resubmission
+		if (rs.prevOccupied > 0)
+			//
+			// resample by selecting prev occupied * 6
+			regrowthModelSlots = 0
+			Variable prevOccupied_6 = rs.prevOccupied * 6
+			regrowthModelSlots[0, prevOccupied_6-1] = 1 // value of 1 denotes a regrowth slot
+			//
+			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots //fills in W_Sampled
+				Wave W_Sampled = W_Sampled
+				// W_Sampled has length rs.totalNumberOfAdded_obs
+				//		at [i] will have value
+				//			1 : If was regrowth
+				//			0 : if no regrowth
+			// count the number of regrowth (hits) in W_Sampled
+			currentNumberOfRegrowth = sum(W_Sampled)
+			currenFractionRegrowth = currentNumberOfRegrowth / rs.totalAdded_obs
+			// append this to model output
+			regrowthOutput_6[i] = currentNumberOfRegrowth
+			fractionRegrowth_6[i] = currenFractionRegrowth
+
+			//
+			// resample by selecting prev occupied * 5
+			regrowthModelSlots = 0
+			Variable prevOccupied_5 = rs.prevOccupied * 6
+			regrowthModelSlots[0, prevOccupied_5-1] = 1 // value of 1 denotes a regrowth slot
+			//
+			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots //fills in W_Sampled
+				Wave W_Sampled = W_Sampled
+				// W_Sampled has length rs.totalNumberOfAdded_obs
+				//		at [i] will have value
+				//			1 : If was regrowth
+				//			0 : if no regrowth
+			// count the number of regrowth (hits) in W_Sampled
+			currentNumberOfRegrowth = sum(W_Sampled)
+			currenFractionRegrowth = currentNumberOfRegrowth / rs.totalAdded_obs
+			// append this to model output
+			regrowthOutput_5[i] = currentNumberOfRegrowth
+			fractionRegrowth_5[i] = currenFractionRegrowth
+		else
+			//regrowthModelSlots[] is 0, no regrowth slots
+		endif
+
 	endfor
 	
 	//global pooledRegrowth
@@ -360,9 +414,10 @@ STRUCT regrowthStruct &rs
 End
 ////////////////////////////////////////////////////////////////////////////////
 //todo: have runRegrowthModel(rs) fill in the answer into rs
-Function plotRegrowthModel(rs)
+Function plotRegrowthModel(rs, doPlot)
 STRUCT regrowthStruct &rs
-	
+Variable doPlot
+
 	// each [i] is number of regroth slots hit per iteration of the model
 	//Wave regrowthOutput = regrowthOutput //created in and output of runRegrowthModel()
 	//Display/K=1 regrowthOutput
@@ -376,7 +431,14 @@ STRUCT regrowthStruct &rs
 	//
 	// observed fraction of new spines that were regrowth spines
 	Variable observedFraction = rs.numRegrow_obs / rs.totalAdded_obs
-	print "observed fraction:", observedFraction
+	if (doPlot)
+		print "observed fraction:", observedFraction
+	endif
+	
+	// debuggin
+	if (observedFraction == 0)
+		print ""
+	endif
 	
 	//
 	// each [i] is the fraction of regrowth for one iteration of model
@@ -390,13 +452,17 @@ STRUCT regrowthStruct &rs
 	numBins = rs.totalAdded_obs + 1
 	//
 
-	print "histogram bins:", numBins
+	if (doPlot)
+		print "histogram bins:", numBins
+	endif
 	Make/O/N=(numBins) regrowthModelHist = nan
 	Histogram /C /B=3 fractionRegrowth, regrowthModelHist //creates W_Histogram
 		// mode /B=3 uses Sturges' method where numBins=1+log2(N)
 		//Wave W_Histogram = W_Histogram
 		//Variable numBins = DimSize(W_Histogram,0)
-		print "plotRegrowthModel() numBins:", numBins
+		if (doPlot)
+			print "plotRegrowthModel() numBins:", numBins
+		endif
 		
 	//just to get max, to plot observed as dotted line
 	WaveStats/Q regrowthModelHist 
@@ -409,22 +475,24 @@ STRUCT regrowthStruct &rs
 		observedFraction_y[0] = 0
 		observedFraction_y[1] = regrowthModalHistMax
 
-	String histWinStr = "modelHist"
-	if (regrowthWinExists(histWinStr))
-		DoWindow/F $histWinStr
-	else
-		Display/K=1 /W=(125,159,520,367) regrowthModelHist
-			DoWindow/C $histWinStr
-			SetAxis bottom 0,1
-			ModifyGraph mode=5,hbFill=5,rgb=(0,0,0)
-			ModifyGraph fSize=14
-			Label bottom "Regrowth Fraction"
-			Label left "Count"
-			// put the observedFraction as a vertical dotted line
-			AppendToGraph observedFraction_y vs observedFraction_x
-				ModifyGraph lstyle(observedFraction_y)=2
+	if (doPlot)
+		String histWinStr = "modelHist"
+		if (regrowthWinExists(histWinStr))
+			DoWindow/F $histWinStr
+		else
+			Display/K=1 /W=(125,159,520,367) regrowthModelHist
+				DoWindow/C $histWinStr
+				SetAxis bottom 0,1
+				ModifyGraph mode=5,hbFill=5,rgb=(0,0,0)
+				ModifyGraph fSize=14
+				Label bottom "Regrowth Fraction"
+				Label left "Count"
+				// put the observedFraction as a vertical dotted line
+				AppendToGraph observedFraction_y vs observedFraction_x
+					ModifyGraph lstyle(observedFraction_y)=2
+		endif
 	endif
-		
+			
 	//
 	// to test if observed fraction is an outlier (< 0.05 or > 0.95)
 	// 1) decide if observed is on left or right of model histogram
@@ -438,19 +506,21 @@ STRUCT regrowthStruct &rs
 	Make/O/N=(numBins) regrowthModelHist_cum = nan
 	Histogram/B=1 /Cum /P fractionRegrowth, regrowthModelHist_cum //creates W_Histogram
 
-	String histWinStr_cum = "modelHist_cum"
-	if (regrowthWinExists(histWinStr_cum))
-		DoWindow/F $histWinStr_cum
-	else
-		Display/K=1 /W=(127,410,522,618) regrowthModelHist_cum
-			DoWindow/C $histWinStr_cum
-			SetAxis bottom 0,1
-			ModifyGraph mode=4,rgb=(0,0,0)
-			ModifyGraph fSize=14
-			Label bottom "Regrowth Fraction"
-			Label left "Cumulative Probability"
+	if (doPlot)
+		String histWinStr_cum = "modelHist_cum"
+		if (regrowthWinExists(histWinStr_cum))
+			DoWindow/F $histWinStr_cum
+		else
+			Display/K=1 /W=(127,410,522,618) regrowthModelHist_cum
+				DoWindow/C $histWinStr_cum
+				SetAxis bottom 0,1
+				ModifyGraph mode=4,rgb=(0,0,0)
+				ModifyGraph fSize=14
+				Label bottom "Regrowth Fraction"
+				Label left "Cumulative Probability"
+		endif
 	endif
-		
+			
 	//
 	// outcome of model
 	WaveStats/Q fractionRegrowth
@@ -458,22 +528,26 @@ STRUCT regrowthStruct &rs
 		Variable modelSD = V_SDEV
 		Variable modelSE = V_SDEV / sqrt(V_NPNTS)
 		Variable modelN = V_npnts
-		print "mean:", V_Avg
-		print "SD:", V_SDEV
-		print "SE:", V_SDEV / sqrt(V_NPNTS)
-		print "n:", V_npnts
-	
+		if (doPlot)
+			print "mean:", V_Avg
+			print "SD:", V_SDEV
+			print "SE:", V_SDEV / sqrt(V_NPNTS)
+			print "n:", V_npnts
+		endif
+		
 	//
 	// unique bins
 	String binList = ""
-	Variable m = DImSize(fractionRegrowth,0)
+	Variable m = DimSize(fractionRegrowth,0)
 	Variable i
 	for (i=0; i<m; i+=1)
 		if (WhichListItem(num2str(fractionRegrowth[i]), binList) == -1)
 			binList += num2str(fractionRegrowth[i]) + ";"
 		endif
 	endfor
-	print "Number of unique fractionRegrowth bins:", ItemsInList(binList)
+	if (doPlot)
+		print "Number of unique fractionRegrowth bins:", ItemsInList(binList)
+	endif
 	
 	//
 	// p
@@ -482,25 +556,41 @@ STRUCT regrowthStruct &rs
 	//Variable cumHistMin = V_Min
 	//Variable cumHistMax = V_Max
 	if (observedFraction < modelMean)
-		print "Observed is to left of model mean"
+		if (doPlot)
+			print "Observed is to left of model mean"
+		endif
 		//pValue = sum(regrowthModelHist_cum, -Inf, observedFraction)
 		//if (observedFraction < cumHistMin)
 		//	pValue = 0
 		//	print "\tp not calculated -->> 0"
 		//else
-			pValue = regrowthModelHist_cum(observedFraction)
+			if (observedFraction < leftx(regrowthModelHist_cum))
+				print "warning: observedFraction:", observedFraction, "leftx:", leftx(regrowthModelHist_cum)
+				pValue = regrowthModelHist_cum[0]
+			else
+				pValue = regrowthModelHist_cum(observedFraction)
+			endif
 		//endif
 	else
-		print "Observed is to right of model mean"
+		if (doPlot)
+			print "Observed is to right of model mean"
+		endif
 		//pValue = sum(regrowthModelHist_cum, observedFraction, Inf)
 		//if (observedFraction > cumHistMax)
 		//	pValue = 0
 		//	print "\tp not calculated -->> 0"
 		//else
-			pValue = 1 - regrowthModelHist_cum(observedFraction)
+			if (observedFraction == 0)
+				print "warning: observedFraction == 0"
+				pValue = 1 - regrowthModelHist_cum[0]
+			else
+				pValue = 1 - regrowthModelHist_cum(observedFraction)
+			endif
 		//endif
 	endif
-	print "\tpValue:", pValue
+	if (doPlot)
+		print "\tpValue:", pValue
+	endif
 	
 	//
 	// fille in regrowth struct with results
