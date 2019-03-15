@@ -10,6 +10,11 @@
 // Purpose:
 //		Run a model to test the null hypothesis
 //		"The observed fraction of new spines that are regrowth spines is occuring by chance."
+//
+// Run:
+//		Run the model from command line with:
+//			regrowthModel_Init()
+//
 
 static constant kRegrowthMaxChar = 256 //once compled, can not change this !!! Igor Problem !!!
 
@@ -124,6 +129,19 @@ Function regrothLoadFile()
 	 	newColList += "modelSD;"
 	 	newColList += "modelSE;"
 	 	//newColList += "modelN;"
+	 	// davis resubmit
+	 	// 5 neighboring slots
+	 	newColList += "pValue_5;"
+	 	newColList += "obsFraction_5;"
+	 	newColList += "modelMean_5;"
+	 	newColList += "modelSD_5;"
+	 	newColList += "modelSE_5;"
+	 	// 6 neighboring slots
+	 	newColList += "pValue_6;"
+	 	newColList += "obsFraction_6;"
+	 	newColList += "modelMean_6;"
+	 	newColList += "modelSD_6;"
+	 	newColList += "modelSE_6;"
 	 	
 	 Variable i
 	 for (i=0; i<ItemsInList(newColList); i+=1)
@@ -239,7 +257,9 @@ Variable doPlot // 20190314 resubmit
 	rs.prevOccupied = prevOccupied // from text file
 	
 	runRegrowthModel(rs)
-	plotRegrowthModel(rs, doPlot)
+	plotRegrowthModel(rs, doPlot, 0)
+	plotRegrowthModel(rs, doPlot, 1)
+	plotRegrowthModel(rs, doPlot, 2)
 End
 ////////////////////////////////////////////////////////////////////////////////
 Function scaleModel(rs)
@@ -414,9 +434,10 @@ STRUCT regrowthStruct &rs
 End
 ////////////////////////////////////////////////////////////////////////////////
 //todo: have runRegrowthModel(rs) fill in the answer into rs
-Function plotRegrowthModel(rs, doPlot)
+Function plotRegrowthModel(rs, doPlot, davisNum)
 STRUCT regrowthStruct &rs
 Variable doPlot
+Variable davisNum // 0:original, 1:5x slots, 2:6x slots
 
 	// each [i] is number of regroth slots hit per iteration of the model
 	//Wave regrowthOutput = regrowthOutput //created in and output of runRegrowthModel()
@@ -442,8 +463,20 @@ Variable doPlot
 	
 	//
 	// each [i] is the fraction of regrowth for one iteration of model
-	Wave fractionRegrowth = fractionRegrowth //created in and output of runRegrowthModel()
-		
+	String appendWinStr = ""
+	if (davisNum==0)
+		//original
+		Wave fractionRegrowth = fractionRegrowth //created in and output of runRegrowthModel()
+	elseif (davisNum== 1)
+		Wave fractionRegrowth = fractionRegrowth_5 //created in and output of runRegrowthModel()
+		appendWinStr += "_5"
+	elseif (davisNum==2)
+		Wave fractionRegrowth = fractionRegrowth_6 //created in and output of runRegrowthModel()
+		appendWinStr += "_6"
+	else
+		print "error: davisNum is", davisNum, "must be (0,1,2)"
+	endif
+	
 	//
 	// Histogram
 	//
@@ -455,8 +488,9 @@ Variable doPlot
 	if (doPlot)
 		print "histogram bins:", numBins
 	endif
-	Make/O/N=(numBins) regrowthModelHist = nan
-	Histogram /C /B=3 fractionRegrowth, regrowthModelHist //creates W_Histogram
+	String regrowthModelHistStr = "regrowthModelHist" + appendWinStr
+	Make/O/N=(numBins) $regrowthModelHistStr = nan
+	Histogram /C /B=3 fractionRegrowth, $regrowthModelHistStr //creates W_Histogram
 		// mode /B=3 uses Sturges' method where numBins=1+log2(N)
 		//Wave W_Histogram = W_Histogram
 		//Variable numBins = DimSize(W_Histogram,0)
@@ -465,7 +499,7 @@ Variable doPlot
 		endif
 		
 	//just to get max, to plot observed as dotted line
-	WaveStats/Q regrowthModelHist 
+	WaveStats/Q $regrowthModelHistStr 
 		Variable regrowthModalHistMax = V_Max
 		
 	Make/O/N=(2) observedFraction_x = nan
@@ -475,12 +509,16 @@ Variable doPlot
 		observedFraction_y[0] = 0
 		observedFraction_y[1] = regrowthModalHistMax
 
+	// move each (0,1,2) window accross screen
+	Variable winLeft = 125 + (davisNum * 450)
+	
 	if (doPlot)
-		String histWinStr = "modelHist"
+		String histWinStr = "modelHist" + appendWinStr
 		if (regrowthWinExists(histWinStr))
 			DoWindow/F $histWinStr
 		else
-			Display/K=1 /W=(125,159,520,367) regrowthModelHist
+			//Display/K=1 /W=(125,159,520,367) regrowthModelHist
+			Display/K=1 /W=(winLeft,159,winLeft+400,367) $regrowthModelHistStr
 				DoWindow/C $histWinStr
 				SetAxis bottom 0,1
 				ModifyGraph mode=5,hbFill=5,rgb=(0,0,0)
@@ -503,15 +541,17 @@ Variable doPlot
 	
 	//
 	// cumulative histogram
-	Make/O/N=(numBins) regrowthModelHist_cum = nan
-	Histogram/B=1 /Cum /P fractionRegrowth, regrowthModelHist_cum //creates W_Histogram
+	String regrowthModelHist_cumStr = "regrowthModelHist_cum" + appendWinStr
+	Make/O/N=(numBins) $regrowthModelHist_cumStr /Wave=regrowthModelHist_cumPtr = nan
+	Histogram/B=1 /Cum /P fractionRegrowth, $regrowthModelHist_cumStr //creates W_Histogram
 
 	if (doPlot)
-		String histWinStr_cum = "modelHist_cum"
+		String histWinStr_cum = "modelHist_cum" + appendWinStr
 		if (regrowthWinExists(histWinStr_cum))
 			DoWindow/F $histWinStr_cum
 		else
-			Display/K=1 /W=(127,410,522,618) regrowthModelHist_cum
+			//Display/K=1 /W=(127,410,522,618) $regrowthModelHist_cumStr
+			Display/K=1 /W=(winLeft,410,winLeft+400,618) $regrowthModelHist_cumStr
 				DoWindow/C $histWinStr_cum
 				SetAxis bottom 0,1
 				ModifyGraph mode=4,rgb=(0,0,0)
@@ -519,7 +559,32 @@ Variable doPlot
 				Label bottom "Regrowth Fraction"
 				Label left "Cumulative Probability"
 		endif
-	endif
+		
+		// plot all three davisNum=(0,1,2) on same plot
+		String histWinStr_cum2 = "cumHist_w"
+		if (regrowthWinExists(histWinStr_cum2))
+			DoWindow/F $histWinStr_cum2
+		else
+			Display/K=1
+			DoWindow/C $histWinStr_cum2
+		endif
+			// always append
+			//Display/K=1 /W=(127,410,522,618) $regrowthModelHist_cumStr
+			if (!bTraceIsInGraph2(histWinStr_cum2, regrowthModelHist_cumStr))
+				AppendToGraph/W=$histWinStr_cum2 $regrowthModelHist_cumStr
+			endif
+				SetAxis/W=$histWinStr_cum2 bottom 0,1
+				if (davisNum==0)
+					ModifyGraph/W=$histWinStr_cum2 mode($regrowthModelHist_cumStr)=4,rgb($regrowthModelHist_cumStr)=(0,0,0)
+				elseif (davisNum==1)
+					ModifyGraph/W=$histWinStr_cum2 mode($regrowthModelHist_cumStr)=4,rgb($regrowthModelHist_cumStr)=(2^16-1,0,0), marker($regrowthModelHist_cumStr)=8
+				elseif (davisNum==2)
+					ModifyGraph/W=$histWinStr_cum2 mode($regrowthModelHist_cumStr)=4,rgb($regrowthModelHist_cumStr)=(0,0,2^16-1), marker($regrowthModelHist_cumStr)=6
+				endif
+				ModifyGraph fSize=14
+				Label bottom "Regrowth Fraction"
+				Label left "Cumulative Probability"		
+	endif // doPlot
 			
 	//
 	// outcome of model
@@ -564,11 +629,11 @@ Variable doPlot
 		//	pValue = 0
 		//	print "\tp not calculated -->> 0"
 		//else
-			if (observedFraction < leftx(regrowthModelHist_cum))
-				print "warning: observedFraction:", observedFraction, "leftx:", leftx(regrowthModelHist_cum)
-				pValue = regrowthModelHist_cum[0]
+			if (observedFraction < leftx($regrowthModelHist_cumStr))
+				print "warning: observedFraction:", observedFraction, "leftx:", leftx($regrowthModelHist_cumStr)
+				pValue = regrowthModelHist_cumPtr[0]
 			else
-				pValue = regrowthModelHist_cum(observedFraction)
+				pValue = regrowthModelHist_cumPtr(observedFraction)
 			endif
 		//endif
 	else
@@ -582,9 +647,9 @@ Variable doPlot
 		//else
 			if (observedFraction == 0)
 				print "warning: observedFraction == 0"
-				pValue = 1 - regrowthModelHist_cum[0]
+				pValue = 1 - regrowthModelHist_cumPtr[0]
 			else
-				pValue = 1 - regrowthModelHist_cum(observedFraction)
+				pValue = 1 - regrowthModelHist_cumPtr(observedFraction)
 			endif
 		//endif
 	endif
@@ -593,21 +658,21 @@ Variable doPlot
 	endif
 	
 	//
-	// fille in regrowth struct with results
+	// fill in regrowth struct with results
 	Wave/T regrowthRawData = root:regrowthRawData
 
 	regrowthRawData[rs.row][%obsFraction] = num2str(observedFraction)
 	//
-	regrowthRawData[rs.row][%pValue] = num2str(pValue)
+	regrowthRawData[rs.row][%$("pValue"+appendWinStr)] = num2str(pValue)
 	//
 	regrowthRawData[rs.row][%iterations] = num2str(rs.numberOfIerations)
 	regrowthRawData[rs.row][%slotLength] = num2str(rs.slotLength)
 	//
 	regrowthRawData[rs.row][%totalNumberOfSlots] = num2str(rs.totalNumberOfSlots)
 	//
-	regrowthRawData[rs.row][%modelMean] = num2str(modelMean)
-	regrowthRawData[rs.row][%modelSD] = num2str(modelSD)
-	regrowthRawData[rs.row][%modelSE] = num2str(modelSE)
+	regrowthRawData[rs.row][%$("modelMean"+appendWinStr)] = num2str(modelMean)
+	regrowthRawData[rs.row][%$("modelSD"+appendWinStr)] = num2str(modelSD)
+	regrowthRawData[rs.row][%$("modelSE"+appendWinStr)] = num2str(modelSE)
 	//regrowthRawData[rs.row][%modelN] = num2str(modelN)
 End
 ////////////////////////////////////////////////////////////////////////////////

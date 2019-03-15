@@ -115,3 +115,15 @@ String wStr
 	endif
 	return theRet
 End
+////////////////////////////////////////////////////////////////////////////////
+//return true if  trace t is in graph g
+Function bTraceIsInGraph2(g, t)
+String g,t
+	Variable theRet = 1
+	String traceList = TraceNameList(g, ";", 1 )
+	Variable idx = WhichListItem(t, traceList)
+	if (idx == -1)
+		theRet = 0
+	endif
+	return theRet
+End
