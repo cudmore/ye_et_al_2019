@@ -168,6 +168,10 @@ Function runRegrowth_All()
 	//global 2, keep track of each model run (10,000)
 	Make/O/N=(10000,m) pooledRegrowth2 = nan
 
+	// davis
+	Make/O/N=(10000*m) pooledRegrowth_5 = nan
+	Make/O/N=(10000*m) pooledRegrowth_6 = nan
+
 	Variable doPlot = 0
 	
 	for (i=0; i<m; i+=1)
@@ -179,16 +183,27 @@ Function runRegrowth_All()
 	print "\tDone"
 End
 ////////////////////////////////////////////////////////////////////////////////
-Function regrowthPoolAnalysis()
+Function regrowthPoolAnalysis(davisNum)
+Variable davisNum // (0,1,2) corresponds to (original, _5, _6)
 
 	//global pooledRegrowth
-	Wave pooledRegrowth = pooledRegrowth
-
+	String davisStr = ""
+	if (davisNum == 0)
+		Wave pooledRegrowth = pooledRegrowth
+	elseif (davisNum == 1)
+		Wave pooledRegrowth = pooledRegrowth_5
+		davisStr = "_5"
+	elseif (davisNum == 2)
+		Wave pooledRegrowth = pooledRegrowth_6
+		davisStr = "_6"
+	endif
+	
 	Variable numBins = 20
 
 	//
 	// hist
-	Make/O/N=(numBins) pooledRegrowthHist = nan
+	String pooledRegrowthHistStr = "pooledRegrowthHist" + davisStr
+	Make/O/N=(numBins) $pooledRegrowthHistStr /Wave=pooledRegrowthHist = nan
 	Histogram /C /B=3 pooledRegrowth, pooledRegrowthHist //creates W_Histogram
 
 	Display/K=1 /W=(527,160,922,368) pooledRegrowthHist
@@ -199,7 +214,8 @@ Function regrowthPoolAnalysis()
 		
 	//
 	// cum hist, model
-	Make/O/N=(numBins) pooledRegrowthHist_cum = nan
+	String pooledRegrowthHist_cumStr = "pooledRegrowthHist_cum" + davisStr
+	Make/O/N=(numBins) $pooledRegrowthHist_cumStr /Wave=pooledRegrowthHist_cum = nan
 	Histogram/B=1 /Cum /P pooledRegrowth, pooledRegrowthHist_cum //creates W_Histogram
 
 	Display/K=1 /W=(529,407,924,615) pooledRegrowthHist_cum
@@ -218,6 +234,7 @@ Function regrowthPoolAnalysis()
 	
 	AppendToGraph pooledRegrowth_obs_hist_cum
 		ModifyGraph mode=4,marker(pooledRegrowth_obs_hist_cum)=8, lsize=2
+			
 End
 ////////////////////////////////////////////////////////////////////////////////
 //initialize model with row selection into raw data
@@ -417,6 +434,15 @@ STRUCT regrowthStruct &rs
 	Wave pooledRegrowth2 = pooledRegrowth2
 	pooledRegrowth2[][rs.row] = fractionRegrowth[p]
 
+	// davis global
+	Wave pooledRegrowth_5 = pooledRegrowth_5
+	Variable startPoolIdx_5 = rs.row * 10000
+	pooledRegrowth_5[startPoolIdx_5, startPoolIdx_5 + 10000-1] = fractionRegrowth_5[p-startPoolIdx_5]
+	
+	Wave pooledRegrowth_6 = pooledRegrowth_6
+	Variable startPoolIdx_6 = rs.row * 10000
+	pooledRegrowth_6[startPoolIdx_6, startPoolIdx_6 + 10000-1] = fractionRegrowth_6[p-startPoolIdx_6]
+	
 	//append to pooledRegrowth
 	
 	//stats for model run
