@@ -334,6 +334,20 @@ STRUCT regrowthStruct &rs
 		//regrowthModelSlots[] is 0, no regrowth slots
 	endif
 	
+	// davis resubmit
+	//5
+	Make/O/N=(rs.totalNumberOfSlots) regrowthModelSlots_5 = 0 // 0 is important so we can sum(W_Sampled)
+	if (rs.currentlyOccupied > 0)
+		Variable currentlyOccupied_5 = rs.currentlyOccupied * 5
+		regrowthModelSlots_5[0, currentlyOccupied_5-1] = 1 // value of 1 denotes a regrowth slot
+	endif
+	//6
+	Make/O/N=(rs.totalNumberOfSlots) regrowthModelSlots_6 = 0 // 0 is important so we can sum(W_Sampled)
+	if (rs.prevOccupied > 0)
+		Variable prevOccupied_6 = rs.prevOccupied * 6
+		regrowthModelSlots_6[0, prevOccupied_6-1] = 1 // value of 1 denotes a regrowth slot
+	endif
+	
 	//build up a list of 'number of regrowth' hits, one element per model iteration
 	Make/O/N=(rs.numberOfIerations) regrowthOutput = NaN
 	Make/O/N=(rs.numberOfIerations) fractionRegrowth = NaN
@@ -380,12 +394,25 @@ STRUCT regrowthStruct &rs
 		// 20190314 for resubmission
 		if (rs.prevOccupied > 0)
 			//
-			// resample by selecting prev occupied * 6
-			regrowthModelSlots = 0
-			Variable prevOccupied_6 = rs.prevOccupied * 6
-			regrowthModelSlots[0, prevOccupied_6-1] = 1 // value of 1 denotes a regrowth slot
+			// resample by selecting currently occupied * 5
 			//
-			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots //fills in W_Sampled
+			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots_5 //fills in W_Sampled
+				Wave W_Sampled = W_Sampled
+				// W_Sampled has length rs.totalNumberOfAdded_obs
+				//		at [i] will have value
+				//			1 : If was regrowth
+				//			0 : if no regrowth
+			// count the number of regrowth (hits) in W_Sampled
+			currentNumberOfRegrowth = sum(W_Sampled)
+			currenFractionRegrowth = currentNumberOfRegrowth / rs.totalAdded_obs
+			// append this to model output
+			regrowthOutput_5[i] = currentNumberOfRegrowth
+			fractionRegrowth_5[i] = currenFractionRegrowth
+
+			//
+			// resample by selecting prev occupied * 6
+			//
+			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots_6 //fills in W_Sampled
 				Wave W_Sampled = W_Sampled
 				// W_Sampled has length rs.totalNumberOfAdded_obs
 				//		at [i] will have value
@@ -398,24 +425,6 @@ STRUCT regrowthStruct &rs
 			regrowthOutput_6[i] = currentNumberOfRegrowth
 			fractionRegrowth_6[i] = currenFractionRegrowth
 
-			//
-			// resample by selecting prev occupied * 5
-			regrowthModelSlots = 0
-			Variable prevOccupied_5 = rs.prevOccupied * 6
-			regrowthModelSlots[0, prevOccupied_5-1] = 1 // value of 1 denotes a regrowth slot
-			//
-			StatsSample /N=(rs.totalAdded_obs) regrowthModelSlots //fills in W_Sampled
-				Wave W_Sampled = W_Sampled
-				// W_Sampled has length rs.totalNumberOfAdded_obs
-				//		at [i] will have value
-				//			1 : If was regrowth
-				//			0 : if no regrowth
-			// count the number of regrowth (hits) in W_Sampled
-			currentNumberOfRegrowth = sum(W_Sampled)
-			currenFractionRegrowth = currentNumberOfRegrowth / rs.totalAdded_obs
-			// append this to model output
-			regrowthOutput_5[i] = currentNumberOfRegrowth
-			fractionRegrowth_5[i] = currenFractionRegrowth
 		else
 			//regrowthModelSlots[] is 0, no regrowth slots
 		endif
